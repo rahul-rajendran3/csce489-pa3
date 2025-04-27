@@ -1,4 +1,4 @@
-from transformers import GPT2Tokenizer, GPT2TokenizerFast, GPT2LMHeadModel, pipeline, set_seed
+from transformers import GPT2Tokenizer, GPT2LMHeadModel, pipeline, set_seed, Trainer, TrainingArguments, DataCollatorForLanguageModeling, GPT2ForSequenceClassification
 from datasets import Dataset, load_dataset
 import numpy as np
 
@@ -9,11 +9,9 @@ from tqdm import tqdm
 def get_transformer_model():
 
 	# Feel free to change models if having memory issue
-	tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
+	tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 	tokenizer.pad_token = tokenizer.eos_token
-	model = GPT2LMHeadModel.from_pretrained("gpt2",
-										 	output_attentions=True,
-											attn_implementation="eager")
+	model = GPT2LMHeadModel.from_pretrained("gpt2", attn_implementation ='eager')
 
 	# 'pt' for PyTorch, 'tf' for TensorFlow
 	framework = 'pt'
@@ -57,6 +55,7 @@ class TransformerModel(object):
 			prompt,
 			max_new_tokens = max_new_tokens,
 			num_return_sequences = num_return_sequences,
+			do_sample=True,
 			temperature=0.7,
 			top_k=5,
 			top_p=0.9,
@@ -162,8 +161,6 @@ class TransformerModel(object):
 
 		# 'positive'/'negative' plus an EoS token
 
-		# print(prompt)
-
 		prediction = self.generate_text(prompt, max_new_tokens=2)
 
 		return prediction.split('\n###\n')[-1]
@@ -194,45 +191,34 @@ class TransformerModel(object):
 
 		##### Your code here #####
 
-		inputs = self.tokenizer(prompt,
-						  		return_offsets_mapping=True,
-								return_special_tokens_mask=True,
-								return_attention_mask=True,
-						  		return_tensors="pt")
+		inputs = self.tokenizer(
+			prompt,
+			return_tensors="pt"
+		)
 
-		outputs = self.model(**inputs)
-
-		enc = inputs.encodings[0]
 		
-		attentions = outputs.attentions
+		device = torch.device('cpu')
+		self.model.to(device)
+		input_ids = inputs.input_ids.to(device)
+		attention_mask = inputs.attention_mask.to(device)
 
-		attn_layer = attentions[layer]
+		outputs = self.model(
+			input_ids,
+			attention_mask=attention_mask,
+			output_attentions=True
+		)
 
-		# Option 1: Use attention from the last head, last token (standard trick)
-		attn_weights = attn_layer[0, -1, -1]  # shape: [seq_len]
-		print(np.shape(attn_weights))
-		attn_weights = attn_weights.detach().numpy()
+		attentions = outputs.attentions[layer][-1]
 
-		# Map tokens to words using .words
-		word_map = enc.words  # e.g., [None, 0, 1, 2, 3, 3, 4, None]
+		tokenwise_attention = attentions.mean(dim=0).sum(dim=0)
+		
+		weights = tokenwise_attention.detach().numpy()
 
-		# Group token attentions into word attentions
-		word_attention = {}
-		for i, word_idx in enumerate(word_map):
-			if word_idx is not None:
-				word_attention.setdefault(word_idx, []).append(attn_weights[i])
+		##### Code done ####
+		
+		assert inputs.input_ids.shape[-1] == len(weights)
 
-		# Average attentions across tokens for each word
-		avg_word_attn = [np.mean(word_attention[i]) for i in sorted(word_attention)]
-
-		##### Code done #####
-
-		print(len(prompt.split()))
-		print(len(avg_word_attn))
-
-		assert len(prompt.split())==len(avg_word_attn)
-
-		return prompt, avg_word_attn
+		return prompt, weights
 
 
 	def finetune(self, trainSet):
@@ -247,12 +233,35 @@ class TransformerModel(object):
 		templates = [{"text": self.get_template(doc, lbl)} for doc, lbl in trainSet]
 		dataset = Dataset.from_list(templates)
 		# Use "left" truncation so that the sentiment is not truncated.
-		map_tokenize = lambda x: self.tokenizer(x['text'], truncation_side='left')
+		self.tokenizer.truncation_side='left'
+		map_tokenize = lambda x: self.tokenizer(x['text'], truncation=True)
 		dataset = dataset.map(map_tokenize, batched=True)
 		dataset = dataset.shuffle(seed=42).train_test_split(test_size=0.1)
 
 		##### Your code here #####
 
+		data_collator = DataCollatorForLanguageModeling(
+			tokenizer=self.tokenizer,
+			mlm=False
+		)
 
+		training_args = TrainingArguments(
+			output_dir="./finetuned-gpt2-sentiment",
+			num_train_epochs=5,
+			per_device_train_batch_size=2,
+			gradient_accumulation_steps=4,
+			learning_rate=5e-5,
+			logging_steps=50
+		)
+
+		trainer = Trainer(
+			model=self.model,
+			args=training_args,
+			train_dataset=dataset["train"],
+			eval_dataset=dataset["test"],
+			data_collator=data_collator,
+		)
+
+		trainer.train()
 
 		##### Code done #####

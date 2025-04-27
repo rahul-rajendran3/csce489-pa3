@@ -102,7 +102,6 @@ if __name__ == '__main__':
 		acc = 0
 		for (doc, lbl), name in zip(testSet, fname):
 			pred = transformer_model.fewshot_sentiment(trainSet, doc).split()
-			# print(pred)
 			if pred[-1] != lbl:
 				if args.debug:
 					print('%s file no. %s got: %s ... %s' %(
