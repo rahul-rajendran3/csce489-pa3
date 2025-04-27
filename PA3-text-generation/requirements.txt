@@ -1,4 +1,5 @@
 transformers
+transformers[torch]
 datasets
 torch
 matplotlib

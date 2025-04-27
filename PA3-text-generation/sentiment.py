@@ -85,7 +85,7 @@ if __name__ == '__main__':
 		transformer_model.finetune(trainSet)
 		acc = 0
 		for (doc, lbl), name in zip(testSet, fname):
-			prompt = transformer_model.get_template(test_doc, "")
+			prompt = transformer_model.get_template(doc, "")
 			pred = transformer_model.generate_text(prompt, max_new_tokens=1).split()
 			if pred[-1] != lbl:
 				if args.debug:
