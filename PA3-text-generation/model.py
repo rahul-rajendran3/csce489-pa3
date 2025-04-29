@@ -55,10 +55,10 @@ class TransformerModel(object):
 			prompt,
 			max_new_tokens = max_new_tokens,
 			num_return_sequences = num_return_sequences,
-			do_sample=True,
-			temperature=0.7,
-			top_k=5,
-			top_p=0.9,
+			temperature=0.1,
+			top_k=50,
+			top_p=0.85,
+			do_sample=True
 		)
 
 		results = []
@@ -231,6 +231,7 @@ class TransformerModel(object):
 					  label is either 'positive' or 'negative'
 		"""
 		templates = [{"text": self.get_template(doc, lbl)} for doc, lbl in trainSet]
+		print(templates[-1])
 		dataset = Dataset.from_list(templates)
 		# Use "left" truncation so that the sentiment is not truncated.
 		self.tokenizer.truncation_side='left'
@@ -248,10 +249,10 @@ class TransformerModel(object):
 		training_args = TrainingArguments(
 			output_dir="./finetuned-gpt2-sentiment",
 			num_train_epochs=5,
-			per_device_train_batch_size=2,
-			gradient_accumulation_steps=4,
-			learning_rate=5e-5,
-			logging_steps=50
+			# per_device_train_batch_size=4,
+			# gradient_accumulation_steps=2,
+			learning_rate=2e-5,
+			logging_steps=10
 		)
 
 		trainer = Trainer(
