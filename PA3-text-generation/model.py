@@ -58,14 +58,28 @@ class TransformerModel(object):
 			temperature=0.1,
 			top_k=50,
 			top_p=0.85,
-			do_sample=True
+			do_sample=True,
 		)
 
+		"""
+		used for Text Generation Basics Task 2
+
+		output = self.generator(
+			prompt,
+			max_new_tokens = max_new_tokens,
+			num_return_sequences = num_return_sequences,
+			temperature=0.4,
+			top_k=1,
+			top_p=1,
+			do_sample=True,
+		)
+		"""
+		
 		results = []
 		for result in output:
 			results.append(result['generated_text'])
 
-		##### Code done #####c
+		##### Code done #####
 		results = "\n".join(results)
 
 		return results
@@ -130,7 +144,7 @@ class TransformerModel(object):
 
 	def get_template(self, doc, lbl):
 		##### Write your own template below #####
-		# template = 'Review: \"%s\"\nSentiment: %s' %(doc, lbl)
+		# template = '\"%s\"\nSentiment: %s' %(doc, lbl)
 		##### Template done #####
 		
 		template = '\"%s\"\n(positive or negative): %s' %(doc, lbl)
@@ -231,12 +245,13 @@ class TransformerModel(object):
 					  label is either 'positive' or 'negative'
 		"""
 		templates = [{"text": self.get_template(doc, lbl)} for doc, lbl in trainSet]
-		print(templates[-1])
+
 		dataset = Dataset.from_list(templates)
 		# Use "left" truncation so that the sentiment is not truncated.
 		self.tokenizer.truncation_side='left'
-		map_tokenize = lambda x: self.tokenizer(x['text'], truncation=True)
-		dataset = dataset.map(map_tokenize, batched=True)
+		def tokenize_function(example):
+			return self.tokenizer(example['text'], truncation=True, padding='max_length', max_length=128)
+		dataset = dataset.map(tokenize_function, batched=True)
 		dataset = dataset.shuffle(seed=42).train_test_split(test_size=0.1)
 
 		##### Your code here #####
@@ -245,14 +260,17 @@ class TransformerModel(object):
 			tokenizer=self.tokenizer,
 			mlm=False
 		)
-
+			
 		training_args = TrainingArguments(
 			output_dir="./finetuned-gpt2-sentiment",
-			num_train_epochs=5,
-			# per_device_train_batch_size=4,
-			# gradient_accumulation_steps=2,
-			learning_rate=2e-5,
-			logging_steps=10
+			overwrite_output_dir=True,
+			per_device_train_batch_size=2,
+			per_device_eval_batch_size=2,
+			num_train_epochs=10,
+			logging_steps=10,
+			weight_decay=0.01,
+			learning_rate=5e-5,
+			report_to="none"
 		)
 
 		trainer = Trainer(

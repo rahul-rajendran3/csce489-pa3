@@ -86,7 +86,7 @@ if __name__ == '__main__':
 		acc = 0
 		for (doc, lbl), name in zip(testSet, fname):
 			prompt = transformer_model.get_template(doc, "")
-			pred = transformer_model.generate_text(prompt, max_new_tokens=1).split()
+			pred = transformer_model.generate_text(prompt, max_new_tokens=2).split()
 			if pred[-1] != lbl:
 				if args.debug:
 					print('%s file no. %s got: %s ... %s' %(
